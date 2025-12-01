@@ -168,7 +168,7 @@ if delete_previous:
     delete_by_reference_month('`dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city`', end_previous_month_str)
     
 
-run_query('.3_subs_asterisk_city', dict_query={'ref_month': end_previous_month_str})
+run_query('1_subs_asterisk_city', dict_query={'ref_month': end_previous_month_str})
 
 create_query_check_last_n_rows('`dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city`')
 
