@@ -240,7 +240,7 @@ select * from (
 select distinct
 DATE(reference_month) reference_month,
 subs_asterisk,
-COALESCE(if(length(numero_inicio) in (8, 14), numero_inicio, null), '') numero_inicio,
+numero_inicio,
 REGEXP_REPLACE(TRIM(REGEXP_REPLACE(nome_limpo, r'^SHOPEE|IFOOD', '')), r'[^A-Z]', '') nome_master,
 cod_muni,
 TRIM(de42_merchant_id) AS de42_document,

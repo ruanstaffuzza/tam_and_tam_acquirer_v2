@@ -1,7 +1,12 @@
+
+DECLARE ref_month  DATE DEFAULT '{{ref_month}}';
+--DECLARE ref_month  DATE DEFAULT '2025-10-31';
 --CREATE OR REPLACE TABLE `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city` PARTITION BY reference_month AS
 
 
-INSERT INTO `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city`
+--INSERT INTO `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city__staging`
+
+CREATE OR REPLACE TABLE `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city__staging` PARTITION BY reference_month AS
 
 -- Cria tabela que determina um 'cod_muni' para cada entrada na tabela de 'mid_de42' 
 -- Usa basicamente 5 técnicas:
@@ -33,7 +38,7 @@ merchant_tax_id,
 from `sfwthr2a4shdyuogrt3jjtygj160rs.mastercard.mid_de42` a
 left join `sfwthr2a4shdyuogrt3jjtygj160rs.mastercard.places` p using(merchant_market_hierarchy_id, reference_month)
 where 1=1
-and reference_month ='{{ref_month}}'
+and reference_month = ref_month
 
 )
 
@@ -123,12 +128,12 @@ CASE
    WHEN STARTS_WITH(merchant_descriptor, 'PAGUEVELOZ*') or STARTS_WITH(merchant_descriptor, 'PGZ*') then 'Pague Veloz'
 
     WHEN  CONTAINS_SUBSTR(merchant_descriptor, '*') 
-           OR REGEXP_CONTAINS(merchant_name, r'^APOIA-?SE')
-           OR STARTS_WITH(merchant_name, r'FACEBOOK')
-           OR STARTS_WITH(merchant_name, r'LOTERIASONLINE')
+           OR REGEXP_CONTAINS(merchant_descriptor, r'^APOIA-?SE')
+           OR STARTS_WITH(merchant_descriptor, r'FACEBOOK')
+           OR STARTS_WITH(merchant_descriptor, r'LOTERIASONLINE')
            OR CONTAINS_SUBSTR(merchant_descriptor, "LINK-")
-           OR STARTS_WITH(merchant_name, r'PIC PAY') 
-           OR STARTS_WITH(merchant_name, r'PICPAY')            
+           OR STARTS_WITH(merchant_descriptor, r'PIC PAY') 
+           OR STARTS_WITH(merchant_descriptor, r'PICPAY')            
            then 'delete_asterisk' -- Não é de interesse
      ELSE 'Outros' END as subs_asterisk, -- Tipo de cliente padrão, que está na places, normal. 
 city_limpo,
@@ -145,7 +150,7 @@ reference_month,
 merchant_market_hierarchy_id,
 CAST(cod_muni_cidade as INT) cod_muni, 
 from `dataplatform-prd.economic_research.geo_places`
-where reference_month ='{{ref_month}}'
+where reference_month = ref_month
 )
 
 
@@ -165,7 +170,7 @@ IF(REGEXP_CONTAINS(original_name, r'[*]'), SPLIT(original_name, '*')[OFFSET(1)],
 from aux_tam_subs_asterisk a 
 left join city_places b using(merchant_market_hierarchy_id, reference_month)
 where 1=1
-and reference_month ='{{ref_month}}'
+and reference_month = ref_month
 )
 
 ----------- ########################################### -------------
@@ -357,11 +362,36 @@ left join (select distinct nome_muni_truncated city_limpo,                 cod_m
 )
 
 , aux_final as (
-select * from asterisk
+select distinct *,
+TRIM(sfwthr2a4shdyuogrt3jjtygj160rs.mastercard.NORMALIZE_ACCENTS(REGEXP_REPLACE(TRIM(UPPER(original_name_split)),  r'[0-9.,\-+]', ''))) nome_limpo,
+REPLACE(REGEXP_extract(TRIM(REGEXP_REPLACE(original_name_split,  r'[.,\-+]', '')) , r'^[0-9 ]+'), ' ', '') numero_inicio, 
+from asterisk
+)
+
+select * except(numero_inicio),
+LENGTH(nome) > 5 as valid_nome,
+REPLACE(nome, ' ', '') nome_merge, -- # Nome sem espaços
+LENGTH(REPLACE(nome, ' ', '')) len_nome_merge, -- # Comprimento do nome sem espaços
+if(length(numero_inicio) in (8, 14), numero_inicio, null) numero_inicio, -- # número de 8 ou 14 dígitos na frente do nome
+RIGHT(de42_merchant_id, 6) = '000000' stonecode_flag,
+from (
+select * except(subs_asterisk),
+IF(starts_with(nome_limpo, 'LOTERIASONLINE') 
+OR starts_with(nome_limpo, 'FACEBOOK')
+OR starts_with(nome_limpo, 'PIC PAY')
+OR starts_with(nome_limpo, 'PICPAY'), 'delete_asterisk', subs_asterisk) as subs_asterisk,
+TRIM(REGEXP_REPLACE(nome_limpo, r'^SHOPEE|IFOOD', '')) AS nome,
+from aux_final
 )
 
 
-select distinct *,
-TRIM(sfwthr2a4shdyuogrt3jjtygj160rs.mastercard.NORMALIZE_ACCENTS(REGEXP_REPLACE(TRIM(UPPER(original_name_split)),  r'[0-9.,\-+]', ''))) nome_limpo,
-REPLACE(REGEXP_extract(TRIM(REGEXP_REPLACE(original_name_split,  r'[.,\-+]', '')) , r'^[0-9 ]+'), ' ', '') numero_inicio,
-from aux_final
+/**
+Mudança de tabela estável e view para desenvolver outras versoes e facilitar deploys futuros
+
+CREATE OR REPLACE TABLE `dataplatform-prd.master_contact.aux_tam_subs_asterisk_city__stable` PARTITION BY reference_month AS
+select * from  `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city`;
+
+CREATE VIEW `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city` AS
+select * from  `dataplatform-prd.master_contact.aux_tam_subs_asterisk_city__stable`;
+
+**/

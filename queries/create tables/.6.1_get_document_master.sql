@@ -2,9 +2,10 @@
 DECLARE ref_month  DATE DEFAULT '{{ref_month}}';
 
 
---CREATE OR REPLACE TABLE `dataplatform-prd.master_contact.v2_aux_tam_get_document_master` PARTITION BY reference_month AS
-INSERT INTO `dataplatform-prd.master_contact.v2_aux_tam_get_document_master`
+CREATE OR REPLACE TABLE `dataplatform-prd.master_contact.v2_aux_tam_get_document_master__staging` PARTITION BY reference_month AS
+--INSERT INTO `dataplatform-prd.master_contact.v2_aux_tam_get_document_master`
 
+--CREATE VIEW `dataplatform-prd.master_contact.v2_aux_tam_get_document_master__staging` AS
 
 -- Cria tabela que determina o documento a partir do nome do estabelecimento e do 'cod_muni'
 -- Tenta fazer o match pelo CPF e pelo CNPJ
@@ -27,39 +28,28 @@ and qtd_nomes_x_muni > 100 --# Issue GetNet
 
 , names_city_master as (
 select 
-distinct
-* except(numero_inicio),
-REPLACE(nome, ' ', '') nome_merge, -- # Nome sem espaços
-LENGTH(REPLACE(nome, ' ', '')) len_nome_merge, -- # Comprimento do nome sem espaços
-if(length(numero_inicio) in (8, 14), numero_inicio, null) numero_inicio -- # número de 8 ou 14 dígitos na frente do nome
- from (
-select 
 distinct 
 a.reference_month,
 merchant_market_hierarchy_id, 
 subs_asterisk,
-TRIM(REGEXP_REPLACE(nome_limpo, r'^SHOPEE|IFOOD', '')) AS nome,
+nome,
 cod_muni,
-REPLACE(REGEXP_extract(TRIM(REGEXP_REPLACE(original_name_split,  r'[.,\-+]', '')) , r'^[0-9 ]+'), ' ', '') numero_inicio,
-from `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city` a
+numero_inicio,
+nome_merge,
+len_nome_merge,
+from `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city__staging` a
 left join acquirer_get_issue b on TRIM(a.de42_merchant_id) = TRIM(b.de42_merchant_id) and a.reference_month = b.reference_month
 where 1=1
 and a.reference_month = ref_month
---and cod_muni in ( 2607901, 2406908,3129806,3305208,4214151,4202057,3302502,4110607,1302603,3549409,2602407,2807204,3555406,3502101,4128104, 4305355,3200169,1303304,3152006,2704302) 
 and subs_asterisk not in ('Ton', 'delete_asterisk')
-and not starts_with(nome_limpo, 'LOTERIASONLINE')
-and not starts_with(nome_limpo, 'FACEBOOK')
-and not starts_with(nome_limpo, 'PIC PAY')
-and not starts_with(nome_limpo, 'PICPAY')
-and not (subs_asterisk='Outros' and RIGHT(a.de42_merchant_id, 6) = '000000') # Stone e TON
-and b.de42_merchant_id is null ---# Gambiarra para não pegar os mmhids Mercado Pago que estão com problemas (crescimento muito grande)
+and not (subs_asterisk='Outros' and stonecode_flag) # Stone e TON
+and b.de42_merchant_id is null
+and valid_nome
 )
-where  LENGTH(nome) > 5
-)
+
 
 
 , names_city_drop_duplicates as (
-
 select distinct 
 nome_merge, len_nome_merge, cod_muni 
 from names_city_master
@@ -76,15 +66,20 @@ from names_city_master
 
 -- Lista única de nomes e documentos
 , final_docs as (
-select distinct 
-cod_muni, nome, cpf, cnpj, nome_merge
-from `dataplatform-prd.master_contact.names_documents` a
-left join `dataplatform-prd.master_contact.participantes_homologados` b using(cnpj)
-where cod_muni in (select cod_muni from munis_interesse)
-and b.cnpj is null
-and situacao_cadastral_ativo
+  SELECT DISTINCT
+    a.cod_muni,
+    a.nome,
+    a.cpf,
+    a.cnpj,
+    a.nome_merge
+  FROM `dataplatform-prd.master_contact.names_documents` a
+  JOIN munis_interesse m
+    ON a.cod_muni = m.cod_muni                -- substitui o "cod_muni in (select ...)"
+  LEFT JOIN `dataplatform-prd.master_contact.participantes_homologados` b
+    USING (cnpj)
+  WHERE b.cnpj IS NULL
+    AND situacao_cadastral_ativo
 )
-
 
 -------- ################################### -------------------
 -- # Processo de truncamento
@@ -166,7 +161,7 @@ reference_month,
 null merchant_market_hierarchy_id,
 'MercadoPago_subPagarme' subs_asterisk,
 CAST(null as STRING) numero_inicio,
-nome_limpo as nome_master,
+nome_limpo as nome,
 cod_muni, 
 REPLACE(nome_limpo, ' ', '') nome_merge,
 IF(length(TaxId) = 11, TaxId, null) cpf,
@@ -190,7 +185,7 @@ reference_month,
 merchant_market_hierarchy_id,
 subs_asterisk,
 numero_inicio,
-nome_master,
+nome,
 cod_muni,
 nome_merge,
 cpf,
@@ -210,7 +205,7 @@ LAST_DAY(DATE_ADD(reference_month, interval 1 day), MONTH) reference_month,
 merchant_market_hierarchy_id,
 subs_asterisk,
 numero_inicio,
-nome_master,
+nome,
 cod_muni,
 nome_merge,
 cpf,
@@ -224,6 +219,14 @@ qtd_muni_cpf_brasil
 from aux1_mp
 )
 
+, aux_mp_filtrado as (
+  SELECT mp.*
+  FROM aux_mp mp
+  JOIN munis_interesse mi
+    USING (cod_muni)
+)
+
+
 
 , names_city_master_stone as (
 select 
@@ -233,10 +236,10 @@ merchant_market_hierarchy_id,
 de42_merchant_id,
 subs_asterisk,
 cod_muni,
-from `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city` a
+from `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city__staging` a
 where 1=1
 and subs_asterisk in ('Outros', 'Stone') 
-and RIGHT(de42_merchant_id, 6) = '000000'
+and stonecode_flag
 and reference_month = ref_month
 )
 
@@ -250,7 +253,6 @@ and reference_month = ref_month
     AND ft.company = 'STONE'
     --AND LAST_DAY(ft.reference_date, MONTH) in (select distinct reference_month from names_city_master)
     and ft.reference_date between DATE_ADD(LAST_DAY(reference_month, MONTH), interval -29 day) and reference_month
-    --and ft.reference_date between DATE_ADD(LAST_DAY(ref_month, MONTH), interval -29 day) and ref_month
 )
 
 , clientes_stone as (
@@ -299,9 +301,7 @@ left join truncated_pf_brasil d using(len_nome_merge, nome_merge)
 left join names_city_master a using(cod_muni, nome_merge, len_nome_merge)
 union all
 
-select * from aux_mp
-where 1=1
-and cod_muni in (select cod_muni from munis_interesse)
+select * from aux_mp_filtrado
 )
 
 

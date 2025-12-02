@@ -37,7 +37,7 @@ left join stone_included using(reference_month, merchant_market_hierarchy_id)
 left join big_mmhid using(reference_month, merchant_market_hierarchy_id)
 where 1=1
 and subs_asterisk in ('Outros', 'Ton', 'Pagarme', 'Stone') 
-and RIGHT(de42_merchant_id, 6) = '000000'
+and stonecode_flag
 and reference_month = ref_month
 and stone_included.merchant_market_hierarchy_id is null
 and big_mmhid.merchant_market_hierarchy_id is null

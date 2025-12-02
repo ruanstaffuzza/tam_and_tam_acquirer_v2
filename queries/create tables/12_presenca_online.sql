@@ -55,7 +55,7 @@ select distinct
 DATE(reference_month) reference_month,
 IF(subs_asterisk not in ('CloudWalk', 'PagSeguro', 'SumUp') and big_mmhid.merchant_market_hierarchy_id is null , CAST(merchant_market_hierarchy_id as STRING), '') merchant_market_hierarchy_id,
 subs_asterisk,
-COALESCE(if(length(numero_inicio) in (8, 14), numero_inicio, null), '') numero_inicio,
+numero_inicio,
 REGEXP_REPLACE(REPLACE(nome_limpo,'IFOOD', ''), r'[^A-Z]', '') nome_master,
 cod_muni,
 RPAD(TRIM(de42_merchant_id), 15, ' ') AS de42,
