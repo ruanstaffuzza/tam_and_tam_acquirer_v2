@@ -28,16 +28,26 @@ def create_query_check_last_n_rows(table_name, ref_month_name = 'reference_month
     display(pandas_gbq.read_gbq(query, project_id='sfwthr2a4shdyuogrt3jjtygj160rs'))
 
 
-def create_query_check_last_n_rows_v2(table_name, ref_month_name = 'reference_month', date_start = '2024-10-01'):
+def create_query_check_last_n_rows_v2(table_name, ref_month_name = 'reference_month', date_start = '2024-10-01',
+                                      extra_cols_groupby = []
+                                      ):
+
+    if extra_cols_groupby:
+        extra_cols_groupby_str = ', '.join(extra_cols_groupby) + ','
+
+        extra_cols_number = ', ' + ', '.join([str(i) for i in range(2, 2 + len(extra_cols_groupby))])
+    else:
+        extra_cols_groupby_str = ''
+        extra_cols_number = ''
     query = f"""
     select 
-    {ref_month_name},
+    {ref_month_name}, {extra_cols_groupby_str}
     count(*) as n_rows,
     count(distinct tam_id) as n_tam_id,
     count(distinct cod_muni) as n_cod_muni,
     from {table_name}
     where {ref_month_name} >= '{date_start}'
-    group by 1
+    group by 1 {extra_cols_number}
     order by 1 
     """
     display(pandas_gbq.read_gbq(query, project_id='sfwthr2a4shdyuogrt3jjtygj160rs'))
@@ -69,11 +79,11 @@ comeco_mes = agora.replace(day=1)
 #anomes = str(agora.year) + str(agora.month).zfill(2)
 
 end_previous_month_str  = (comeco_mes - timedelta(days=1)).strftime('%Y-%m-%d')
-#end_previous_month_str = '2025-06-30'
+end_previous_month_str = '2025-10-31'
 print(f'{end_previous_month_str}')
 
 
-delete_previous = False
+delete_previous = True
 
 #%%
 create_query_check_last_n_rows("""
@@ -89,7 +99,11 @@ create_query_check_last_n_rows_v2('(select * from `dataplatform-prd.master_conta
 create_query_check_last_n_rows_v2('(select * from `dataplatform-prd.master_contact.v3_aux_tam_python_agrupados` where ingestion_date >= "2025-09-17")'
                                ,ref_month_name='ingestion_date')
 
+#%%
 
+create_query_check_last_n_rows_v2('(select * from `dataplatform-prd.master_contact.v3_aux_tam_python_agrupados` where ingestion_date >= "2025-09-17")'
+                               ,ref_month_name='reference_month',
+                               extra_cols_groupby=['ingestion_date'])
 #%%
 
 create_query_check_last_n_rows_v2('(select * from `dataplatform-prd.master_contact.v3_aux_tam_python_agrupados` where ingestion_date >= "2025-09-17")'
@@ -99,7 +113,7 @@ if delete_previous:
     delete_by_reference_month('`dataplatform-prd.master_contact.v3_aux_tam_pos_python`', end_previous_month_str, ref_month_name='reference_date')
 
 run_query('9_tam', dict_query={'ref_month': end_previous_month_str,
-                               'ingestion_filter': "and ingestion_date >= '2025-09-29'"
+                               'ingestion_filter': "and ingestion_date >= '2025-12-12'"
                                }, update=True)
 
 create_query_check_last_n_rows_v2('`dataplatform-prd.master_contact.v3_aux_tam_pos_python`', ref_month_name='reference_date')

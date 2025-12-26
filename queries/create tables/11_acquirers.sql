@@ -20,7 +20,8 @@ CASE WHEN REGEXP_CONTAINS(original_name, r'\p{Ll}') THEN TRUE ELSE FALSE END AS 
 from `dataplatform-prd.master_contact.v2_aux_tam_subs_asterisk_city`
 where 1=1
 and subs_asterisk='Outros'
-and not (subs_asterisk='Outros' and stonecode_flag) # Stone
+--and not (subs_asterisk='Outros' and stonecode_flag) # Stone
+and not (subs_asterisk='Outros' and RIGHT(de42_merchant_id, 6) = '000000') # Stone
 and reference_month = ref_month
 )
 

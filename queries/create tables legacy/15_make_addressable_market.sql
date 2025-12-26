@@ -88,3 +88,17 @@ INSERT INTO `dataplatform-prd.addressable_market.tam_geocoded`
 select * from `dataplatform-prd.master_contact.final_tam_geocoded`
 where reference_date = ref_month
 ;
+
+
+
+/*
+DECLARE ref_month  DATE DEFAULT '{{ref_month}}';
+DELETE FROM `dataplatform-prd.addressable_market.tam_acquirer`
+WHERE reference_date = ref_month;
+DELETE FROM `dataplatform-prd.addressable_market.tam_tier`
+WHERE reference_date = ref_month;
+DELETE FROM `dataplatform-prd.addressable_market.tam`
+WHERE reference_date = ref_month;
+DELETE FROM `dataplatform-prd.addressable_market.tam_geocoded`
+WHERE reference_date = ref_month;
+*/
