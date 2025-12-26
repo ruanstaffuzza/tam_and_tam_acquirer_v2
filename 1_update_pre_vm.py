@@ -218,10 +218,17 @@ create_query_check_last_n_rows('`dataplatform-prd.master_contact.v2_aux_tam_pre_
 #%% 
 
 run_query('.6.0_cross_company', dict_query={'ref_month': end_previous_month_str})
-create_query_check_last_n_rows('`dataplatform-prd.master_contact.v2_temp_cross_company`', 
-                               ref_month_name='reference_date')
+create_query_check_last_n_rows('(select LAST_DAY(reference_date) ref_dt, * from `dataplatform-prd.master_contact.v2_temp_cross_company`)', 
+                               ref_month_name='ref_dt')
 
 
+create_query_check_last_n_rows('(select distinct LAST_DAY(reference_date) ref_dt, document from `dataplatform-prd.master_contact.v2_temp_cross_company`)', 
+                               ref_month_name='ref_dt')
+
+
+
+create_query_check_last_n_rows('(select distinct LAST_DAY(reference_date) ref_dt, document from `dataplatform-prd.master_contact.v2_temp_cross_company` where company = "STONE")', 
+                               ref_month_name='ref_dt')
 
 
 #%%

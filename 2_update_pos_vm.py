@@ -76,6 +76,90 @@ print(f'{end_previous_month_str}')
 delete_previous = False
 
 #%%
+
+ingestion_filter = ""  
+
+
+query_check_merge = f"""
+DECLARE ref_month  DATE DEFAULT '{end_previous_month_str}';
+
+WITH aux_final_nomes AS (
+  SELECT DISTINCT
+    * EXCEPT(mmhid_merge, pre_doc_unmerge, id_merge_places, is_mp, id_ton),
+    COALESCE(pre_doc_unmerge, '') AS doc_unmerge,
+    COALESCE(mmhid_merge, 99)     AS new_mmhid_merge,
+    COALESCE(id_merge_places, '') AS id_merge_places
+  FROM `dataplatform-prd.master_contact.v3_aux_tam_final_nomes`
+  WHERE reference_month = ref_month
+),
+
+aux_python_agrupados AS (
+  SELECT
+    * EXCEPT(id_merge_places, grouped_names, pre_doc_unmerge),
+    COALESCE(mmhid_merge, 99)     AS new_mmhid_merge,
+    COALESCE(pre_doc_unmerge, '') AS doc_unmerge,
+    COALESCE(id_merge_places, '') AS id_merge_places
+  FROM `dataplatform-prd.master_contact.v3_aux_tam_python_agrupados`
+  WHERE reference_month = ref_month
+  {ingestion_filter}
+),
+
+t1_total AS (
+  SELECT reference_month, COUNT(*) AS total_t1
+  FROM aux_python_agrupados
+  GROUP BY 1
+),
+
+t2_total AS (
+  SELECT reference_month, COUNT(*) AS total_t2
+  FROM aux_final_nomes
+  GROUP BY 1
+),
+
+t1_sem_match AS (
+  SELECT a.reference_month, COUNT(*) AS t1_sem_corresp_em_t2
+  FROM aux_python_agrupados a
+  LEFT JOIN aux_final_nomes b
+    USING (reference_month, inicio, new_mmhid_merge, nome_master, cod_muni, id_merge_places, doc_unmerge)
+  WHERE b.reference_month IS NULL
+  GROUP BY 1
+),
+
+t2_sem_match AS (
+  SELECT b.reference_month, COUNT(*) AS t2_sem_corresp_em_t1
+  FROM aux_final_nomes b
+  LEFT JOIN aux_python_agrupados a
+    USING (reference_month, inicio, new_mmhid_merge, nome_master, cod_muni, id_merge_places, doc_unmerge)
+  WHERE a.reference_month IS NULL
+  GROUP BY 1
+),
+
+meses AS (
+  SELECT reference_month FROM t1_total
+  UNION DISTINCT
+  SELECT reference_month FROM t2_total
+)
+
+SELECT
+  m.reference_month,
+  COALESCE(t1.total_t1, 0) AS total_t1,
+  COALESCE(t2.total_t2, 0) AS total_t2,
+  COALESCE(s1.t1_sem_corresp_em_t2, 0) AS t1_sem_corresp_em_t2,
+  SAFE_DIVIDE(COALESCE(s1.t1_sem_corresp_em_t2, 0), NULLIF(t1.total_t1, 0)) AS pct_t1_sem_match,
+  COALESCE(s2.t2_sem_corresp_em_t1, 0) AS t2_sem_corresp_em_t1,
+  SAFE_DIVIDE(COALESCE(s2.t2_sem_corresp_em_t1, 0), NULLIF(t2.total_t2, 0)) AS pct_t2_sem_match
+FROM meses m
+LEFT JOIN t1_total t1 USING (reference_month)
+LEFT JOIN t2_total t2 USING (reference_month)
+LEFT JOIN t1_sem_match s1 USING (reference_month)
+LEFT JOIN t2_sem_match s2 USING (reference_month)
+ORDER BY m.reference_month;
+"""
+
+
+display(pandas_gbq.read_gbq(query_check_merge, project_id='sfwthr2a4shdyuogrt3jjtygj160rs'))
+
+#%%
 create_query_check_last_n_rows("""
     (select * except(ingestion_date), DATE(ingestion_date) ingestion_date from `dataplatform-prd.master_contact.v2_aux_tam_python_agrupados`)
                                """, ref_month_name='ingestion_date')

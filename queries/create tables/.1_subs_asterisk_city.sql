@@ -34,7 +34,7 @@ from `sfwthr2a4shdyuogrt3jjtygj160rs.mastercard.mid_de42` a
 left join `sfwthr2a4shdyuogrt3jjtygj160rs.mastercard.places` p using(merchant_market_hierarchy_id, reference_month)
 where 1=1
 and reference_month ='{{ref_month}}'
-
+and original_city is not null and merchant_descriptor is not null --# problema nos dados a partir de 30-11-2025
 )
 
 , aux_tam_subs_asterisk as (
